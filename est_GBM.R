@@ -22,7 +22,7 @@ ui<-fluidPage(
       numericInput("simul",
                    "Simulaciones",
                    min = 1,
-                   value = 1),
+                   value = 5),
       checkboxInput("seeds",
                     "¿Quieres establecer una semilla?"),
       numericInput("setseed",
