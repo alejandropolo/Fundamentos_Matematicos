@@ -1,5 +1,4 @@
 ---
-
 title: "Proyecto FME"
 author: "Alejandro Polo"
 date: "12/7/2020"
@@ -10,6 +9,7 @@ output:
   pdf_document: default
 header-includes: \usepackage{amsmath}
     
+runtime: shiny
 ---
 
 
