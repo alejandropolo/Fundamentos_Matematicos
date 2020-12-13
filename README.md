@@ -10,8 +10,9 @@ En este repositorio de GitHub se aloja el trabajo correspondiente a la asignatur
 Dentro de este repositorio se puede encontrar el R-markdown con el trabajo completo así como las aplicaciones shiny
 
 
+  
   1) Trabajo-FME.Rmd : Archivo que contiene el R-markdown del proyecto 
-  2) est_pi.R : Shiny App para la estimación del número pi
+  2) est_GMB.R : Shiny App para la representación de múltiples GBM
   3) est_integral.R : Shiny App para la estimación de la integral
-  4) est_GMB.R : Shiny App para la representación de múltiples GBM
   4) est_montecarlo.R : Shiny App para la estimación de un derivado financiero
+  5) est_pi.R : Shiny App para la estimación del número pi
