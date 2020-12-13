@@ -1,0 +1,744 @@
+---
+
+title: "Proyecto FME"
+author: "Alejandro Polo"
+date: "12/7/2020"
+output:
+  rmarkdown::html_document:
+    theme: lumen
+    df_print: paged
+  pdf_document: default
+header-includes: \usepackage{amsmath}
+    
+---
+
+
+# FUNDAMENTOS MATEMÁTICOS
+
+```{r,echo=FALSE}
+#Paquete de librerías
+library(shiny)
+library(ggplot2)
+library(devtools)
+#install_github("jirotubuyaki/Jdmbs")
+library(Jdmbs)
+```
+
+
+<center> <h1> ALEJANDRO POLO MOLINA </h1> </center>
+
+
+En este trabajo vamos a presentar el método de Monntecarlo y, junto con él, algunas de sus aplicaciones más importantes. Se ha tratado de darle un enfoque principalemte matemático-estadístico, combinado con su aplicación en R mediante aplicaciones Shiny y gráficos para poder hacerlo más visual.
+
+
+# 1. Presentación
+
+
+El método de Montecarlo es un método computacional basado en la repetición de experimentos aleatorios para poder obtener solución a formulaciones matemáticas complejas y muy costosas de evaluar. El principio en el que se basa es algo contradictorio ya que usaremos procesos aleatorios para poder resolver problema determinísticos. Pese a que su formalización que en algunos casos puede ser compleja, la idea intuitiva que subyace es lógica. Si repetimos un experiemento suficientes veces podemos tener una estimación de la realidad. Más adelante, entraremos en como realizamos los experimentos para que los resultados tengan validez.
+
+## 1.1 Estimación de Pi usando el método de montecarlo
+
+Como una buena forma de introducirnos con el método de Montecarlo vamos a revisitar un problema clásico propuesto por Buffon y Laplace para tratar de simular el valor de pi. La idea es la siguiente, queremos encontrar el valor de pi y para ello lo que hacemos es inscribir un círculo de radio 1 en un cuadrado de lado 2. El resultado sería algo tal que así:
+
+<p align="center">
+  <img width="200" height="200" src="/Users/alejandropolo/Downloads/unnamed.png">
+</p>
+
+Por una parte sabemos que el área del circulo viene dado por $\pi r^2 =\pi$, dado que el radio lo hemos cogido como uno. En este punto, Buffon propuso que podríamos estimar el valor de $\pi$ simplemente dejando caer un gran número de agujas sobre nuestro tablero con el círculo dibujado como descrito anteriormente. ¿En qué se basó Buffon para poder hacer esta estimación? Pues, y aunque el método de Montecarlo no estuviese desarrollado por aquellas fechas, Buffon utilizó el método aquí descrito. 
+
+La idea que tuvo es que si dejamos caer un número suficientemente grande de agujas, entonces la proporción de agujas que caerían dentro del circulo y aquellas que caerían fuera del círculo, si nuestro número de agujas es suficientemente grande, debería ser igual al área del círculo divido por el área total del cuadrado.  Para poder aseverar esto, es fundamental el concepto de aletoriedad en nuestro experimento. Cada punto del tablero es igualmente equiprobable a que la aguja caiga sobre él. Por lo tanto, la probabilidad de caer dentro del círculo es igual al área de este. Si nuestro experimento no fuese aleatorio, pensemos por ejemplo en imanes en el borde del tablero y agujas imantadas que tienden a buscar los extremos de este, lo aquí expuesto carecería absolutamente de valor. El concepto de aletoriedad es algo que nos toparemos frecuentemente en este proyecto y que es importante manejarlo con cuidado. Veamos matemáticamente esta relación.
+
+\begin{align*}
+
+\frac{A_{circ}}{A_{cuadrado}}=\frac{\pi r*2}{4 r^2} \implies \pi = 4 \frac{A_{circ}}{A_{cuadrado}}
+
+\end{align*}
+
+A continuación, mostramos su simulación del método de montecarlo para poder obtener una estimación de $\pi$ y como comentado vemos que cuando aumentan nuestras ejecucciones el valor cada vez se aproxima más a su valor real.
+
+```{r}
+
+ui <- fluidPage(
+  titlePanel("Estimating Pi using Monte Carlo Simulation"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("n",
+                  "Número de muestras que vamos a generar: ",
+                  min = 0,
+                  max = 50000,
+                  value = 100,
+                  step = 20)
+    ),
+    mainPanel(
+      plotOutput("distPlot")
+    )
+  )
+)
+
+server <- function(input, output) {
+  output$distPlot <- renderPlot({
+    
+    #Generamos el número de muestras con la función runif entre el 1 y el -1
+    #Basicamente lo que hacemos es generar parejas de x e y siendo ambos aleatorios y entre dichos valores
+    samps <- data.frame(replicate(2, runif(input$n, -1, 1)))
+    #Comprobamos cuales estan en el círculo
+    samps$in_circ <- samps$X1^2 + samps$X2^2 < 1
+    
+   #Estimamos pi usando la formula anterior
+    pi.est <- 4 * mean(samps$in_circ)
+    
+    #Dibujamos el circulo
+    c.seq <- seq(from = 0, to = 2 * pi, length.out = 200)
+    circ <- data.frame(x = cos(c.seq), y = sin(c.seq))
+    
+    #Ploteamos
+    ggplot(samps, aes(x = X1, y = X2)) +
+      geom_point(aes(colour = in_circ), show.legend = FALSE, shape = ".") +
+      geom_path(data = circ, aes(x, y)) +
+      xlab("x") +
+      ylab("y") +
+      ggtitle(paste0("Muestras: ",
+                     as.character(input$n),
+                     ", Estimación de pi: ",
+                     as.character(round(pi.est, 5)),", Error cometido: ",as.character(round(abs(pi-pi.est),5)))) +
+      coord_fixed() +
+      theme_minimal()
+  })
+}
+
+shinyApp(ui = ui, server = server)
+
+```
+
+## 1.2 Aproximación de una integral usando el método de Montecarlo
+
+Uno de los usos más habituales que encontramos dentro de los métodos de Montecarlo es aproximar integrales. Resolver integrales no es siempre un problema sencillo e inlcuso muchas veces nos encontramos con integrales no resolubles. Es por ello que se han desarrollado multitud de métodos de aproximación. En este caso vamos a describir como poder aplicar el método de Montecarlo para obtener el valor de una integral. En el ámbito de la matemática aplicada, la aproximación de una integral por medio de los métodos habituales queda en desventaja frente a este método cuando se trabaja en espacios n-dimensionales. Supongamos que queremos averiguar el valor $\alpha$ de la siguiente integral:
+$$
+\alpha=\int_{0}^{1}f(x)dx
+$$
+Para poder estimar numéricamente el valor de esta integral, podríamos tratar de considerar cuál es el valor esperado de dicha función si como argumento toma un valor de la distribución uniforme en el intervalor $[0,1]$. Podríamos repetir dicho proceso n-veces y ver la media de dichas estimaciones para poder así encontrar un valor estimado para $\alpha$. Esto es precisamente lo que haremos
+$$
+\hat{\alpha}_n=\frac{1}{n}\sum_{i=1}^{n}f(U_i)
+$$ 
+donde $U_i\sim \mathcal{U}(0,1))$. Además, se puede demostrar que el valor de $\hat{\alpha}_n$ converge $\alpha$ cuando $n$ converge hacia $\infty$. El principio de aletoriedad subyacente es el msmo y por tanto extrapolable que en el calculo de pi. Al tomar una distribución uniforme en el intervalo $[0,1]$, todos los puntos en dicho intervalo son equiprobables. 
+
+```{r}
+
+ui <- fluidPage(
+  titlePanel("Generamos puntos aleatorios en el plano"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("n",
+                  "Número de muestras que vamos a generar :",
+                  min = 0,
+                  max = 1000,
+                  value = 10,
+                  step = 1)
+    ),
+    mainPanel(
+      plotOutput("distPlot")
+    )
+  )
+)
+
+server <- function(input, output) {
+  output$distPlot <- renderPlot({
+    iter=input$n
+    
+    val=runif(iter, min = 0, max = 1)
+    vaL=as.data.frame(val)
+    plot(vaL$val)
+  })
+}
+
+
+
+shinyApp(ui = ui, server = server)
+```
+
+Una vez qu ya hemos visualizado com se generan de forma aleatoria nuestro puntos podemos poner a prueba nuestra teoría con una integral sencilla. En concreto vamos a tratar de estimar la integral $\int_{0}^{1} x$. Esta integral sabemos que es resoluble y además su valor es $$\int_{0}^{1} x= \left(\frac{x^2}{2}\right]_{0}^{1}=\frac{1}{2}$$ Veamos como vamos aproximándonos al valor desado y como el erro disminuye a menudo que vamos aumentando las muestras.
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Aproximación de la integral f(x)=x"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("n",
+                  "Número de muestras que vamos a generar :",
+                  min = 0,
+                  max = 1000,
+                  value = 10,
+                  step = 1)
+    ),
+    mainPanel(
+      plotOutput("distPlot")
+    )
+  )
+)
+
+server <- function(input, output) {
+
+    output$distPlot <- renderPlot({
+        n=input$n
+        val=runif(n, min = 0, max = 1)
+        vaL=as.data.frame(val)
+
+        est=sum(val)/n
+        error=abs(0.5-est)
+
+        val_sort=vaL$val[order(vaL$val)]
+
+        plot(val_sort,main=paste("El valor aproximado de la integral es: ", round(est,4)," y el error es: ",round(error,6)))
+        
+    })
+}
+
+
+shinyApp(ui = ui, server = server)
+```
+
+
+## 1.3 Movimiento Browniano
+El ejemplo anterior es una aplicación muy sencilla e intuitiva del método de Montecarlo. De aquí en adelante, nos adentramos en una formulación matemática más compleja que de soporte a aquello que queremos concluir.
+
+Primeramente, nos centraremos en intentar explicar la justificación matemática del movimiento Browniano antes de presentarlo formalmente. Para ello, trataremos de analizar el movimiento de una partícula en una cuadrícula bidimensional.
+
+Supongamos que nuestra partícula se mueve a la izquierda o a la derecha de forma equiprobable, es decir con probabilidad 1/2. Si tomamos $X(t)$ como la posición de la partícula a tiempo t, podemos definir:
+$$
+S_n:=\sum_{i=1}^{n}X_i
+$$
+siendo $X_i$ v.a. tales que:
+$$\left\{
+    \begin{array}{ll}
+        P(X_i=0) =\frac{1}{2}\\
+        P(X_i=1) =\frac{1}{2}
+    \end{array}
+    \right.
+$$
+Podemos interpretar el suceso éxito como moverse hacia la derecha mientras que el suceso fracaso sería moverse hacia la izquierda. Por lo tanto tendríamos que $S_n$ podría indicarnos el número de movimientos que se realizan hacia la derecha a tiempo t. Tomando estas consideraciones tendríamos que:
+$$X(t)=S_n\Delta x +(n-S_n)(-\Delta x)=(2S_n-n)\Delta x$$
+Asumiendo que $\frac{(\Delta x)^2}{\Delta t}=d$, donde d es una constante positiva, entonces 
+$$
+X(t)=\left(\frac{S_n-\frac{n}{2}}{\sqrt{\frac{n}{4}}}\right)\sqrt{n}\Delta x=
+X(t)=\left(\frac{S_n-\frac{n}{2}}{\sqrt{\frac{n}{4}}}\right)\sqrt{td}
+$$
+ya que $\Delta x =\sqrt{d \Delta t}$ y $t=n \Delta t$. Usando ahora el Teorema de Laplace-DeMoivre:
+\begin{align*}
+\lim_{n\rightarrow \infty}P(a \leq X(t) \leq b)&=\lim_{n\rightarrow \infty}P\left(\frac{a}{\sqrt{td}} \leq\frac{S_n-\frac{n}{2}}{\sqrt{\frac{n}{4}}}  \leq \frac{b}{\sqrt{td}} \right)\\
+&=\frac{1}{\sqrt{2\pi}}\int_{\frac{a}{\sqrt{td}}}^{\frac{b}{\sqrt{td}}}e^{-\frac{x^2}{2}}dx\\
+&=\frac{1}{\sqrt{2\pi dt}}\int_{\frac{a}{\sqrt{td}}}^{\frac{b}{\sqrt{td}}}e^{-\frac{x^2}{2dt}}dx
+\end{align*}
+
+Con lo cual hemos visto que el movimiento de la partícula sigue una distribución $N(0,dt)$ y por lo tanto los crecimientos del movimiento browniano son normales.
+
+De ahora en adelante tomaremos $d=1$. Comencemos definiendo qué es un Proceso de Wiener o un movimiento browniano cuyas nociones serán absolutamente necesarias en el devenir de las Ecuaciones Diferenciales Estocásticas:
+
+
+**DEFINICIÓN **
+
+Un proceso estocástico evaluado en $\mathbb{R}$ se dice que es un \textit{Proceso de Wiener o un movimiento Browniano} si:
+
+**1)** W(0) = 0 casi seguramente
+
+**2)** $W(t)-W(s)$ sigue una distribución $N(0,t-s), \forall t \geq s \geq 0$
+
+**3)** $\forall\, 0<t_{1} < t_{2} < ... < t_{n}$ las variables aleatorias $W(t_{1}),W(t_{2})-W(t_{1}),...,W(t_{n})-W(t_{n-1})$ son independientes. Esto último se puede interpretar como que los incrementos del proceso estocástico son independientes.
+
+
+
+
+En vista del punto (ii) de la definición anterior y sabiendo qué significan cada uno de los parámetros de una normal es obvio que $E(W(t))=0$ y que $E(W(t)^2))=t$.Un movimiento browniano, como hemos descrtio anteriormente, es un  proceso estocástico. Como sabemos, un proceso estocástico tiene dos componentes. Es por esto que cuando realizamos una realización del proceso estocástico en el tiempo no estamos viendo más que eso, una de las múltiples posibilidades en las que nuestro proceso estocástico ha podido desarrollarse. Este concepto es fundamental dado que nos presenta la relación entre procesos estocásticos y el método de montecarlo que desentrañaremos más adelante. Para poder observar aún mas a lo que nos referimos, presentamos aquí como podemos ir generando nuevas realizaciones y como van desarrollandose en el tiempo
+
+```{r}
+ui<-fluidPage(
+  
+  titlePanel("Geometric Brownian Motion - Monte Carlo Simulation"),
+  
+  sidebarLayout(
+    sidebarPanel(
+       numericInput("drift",
+                    "Drift Rate (%):",
+                    min = 1,
+                    value = 15),
+       numericInput("stdev",
+                    "Yearly Standard Deviation (%)",
+                    min = 1,
+                    value = 30),
+       numericInput("initPrice",
+                    "Initial Stock Price",
+                    min = 1,
+                    value = 100),
+       numericInput("simul",
+                    "Number of Simulations",
+                    min = 1,
+                    value = 1),
+       checkboxInput("seeds",
+                     "Set seed?"),
+       numericInput("setseed",
+                    "Select number of seed",
+                    min = 1,
+                    value = 1),
+       submitButton("Submit")
+    ),
+    
+    mainPanel(
+       plotOutput("distPlot"),
+       headerPanel(withMathJax("$$\\text{GBM Model: } S_0 \\exp\\left(\\left(\\mu - \\frac{\\sigma^2}{2}\\right)t + \\sigma W_t\\right) $$")),
+       h4("To run the simulation you have to enter the following inputs on the side bar:"),
+       h4("Initial Stock Price is the current price of the stock;"),
+       h4("Drift rate is the expected rate of return;"),
+       h4("Yearly Standard Deviation is the volatility of the stock price;"),
+       h4("Number of Simulation represents how many simulation of stock price you want to display;"),
+       h4("In the side bar is also possible, through a check box, to set the seed to a fix value. Please mark the check box and select the value from the numeric box. If it is unmarked the seed will be assigned randomly.
+            As the calculation time increases with the number of simulation, there is a 'Submit' button to click as soon as the parameters are decided.")
+    )
+  )
+)
+
+server<-shinyServer(function(input, output) {
+   
+  output$distPlot <- renderPlot({
+          if (input$seeds == TRUE) {
+                  set.seed(input$setseed)
+          }
+          mu <- input$drift/100
+          sigma <- input$stdev/100
+          S0 <- input$initPrice
+          nsim <- input$simul
+          t <- 365
+          
+          gbm <- matrix(ncol = nsim, nrow = t)
+          for (simu in 1:nsim) {
+                  for (day in 2:t) {
+                          epsilon <- rnorm(t)
+                          dt = 1 / 365
+                          gbm[1, simu] <- S0
+                          gbm[day, simu] <- exp((mu - sigma * sigma / 2) * dt + sigma * epsilon[day] * sqrt(dt))
+                  }
+          }
+          gbm <- apply(gbm, 2, cumprod)
+          
+          ts.plot(gbm, gpars = list(col=rainbow(10)))
+  })
+})
+shinyApp(ui = ui, server = server)
+```
+
+
+
+
+## 1.4 Ecuaciones Diferenciales Estocásticas
+
+Pasamos a otro apartado fundamental para el desarollo de esta teoría que son las Ecuaciones Diferenciales Estocásticas. En este punto podríamos preguntarnos porqué se ha introcuido con anterioridad el concepto de movimiento Browniano. Pues bien, el movimiento browniano será aquello que dote de aletoriedad a nuestro proceso estocástico ya que cuando trabajemos con el precio de un activo financiero habrá una componente de aletoriedad que no podremos conocer de antemano pero si sus propiedades. Comenzaremos con una breve descripción previo a pasar ya al cálculo como tal:
+
+Decimos que un proceso estocástico $\textbf{X}(\cdot)$ $\mathbb{R}^n$-valuado es solución de la ecuación diferencial estocástica:
+\begin{equation}\tag{EDE}
+       \left\{
+    \begin{array}{ll}
+        d\textbf{X}= b(\textbf{X},t)dt+B(\textbf{X},t)d\textbf{W}\\
+        \textbf{X}(0)=\textbf{X}_0
+    \end{array}
+    \right.
+\end{equation}
+para un cierto t con $0\leq t\leq T$ si:
+
+**1)**$\textbf{X}(\cdot)$ es progresivamente medible con respecto a $\mathcal{F}(\cdot)$ (donde $\mathcal{F}(\cdot)$ es una filtración definida en \ref{def: filtración}).
+
+**2)**$\textbf{F}:=b(\textbf{X},t)\in \mathbb{L}_{n}^1(0,T)$ 
+
+**3)**$\textbf{F}:=B(\textbf{X},t)\in \mathbb{L}_{n\times m}^2(0,T)$
+
+**4)**$\textbf{X}= \int_{0}^{t}b(\textbf{X}(s),s)ds+\int_{0}^{t}B(\textbf{X}(s),s)d\textbf{W}$ casi seguramente para todo $0\leq t\leq T$ 
+
+
+Comencemos dando un ejemplo de una Ecuación Diferencial Estocástica muy sencilla y comprobando que efectivamente tiene solución ya que daremos la expresión de su solución explícita.
+
+
+Consideramos este caso un proceso estocástico $X(\cdot)$ real valuado (m=n=1) con g una función continua. Entonces la única solución del problema:
+\[
+\left\{
+    \begin{array}{ll}
+        dX= gXdW\\
+        X(0)=1
+    \end{array}
+    \right.
+\]
+es
+\[
+X(t)=e^{-\frac{1}{2}\int_{0}^{t}g^2ds+\int_{0}^{t}gdW}
+\]
+para un cierto t con $0\leq t\leq T$.
+
+
+Para verificar que esto es cierto tomamos:
+\[
+Y:=-\frac{1}{2}\int_{0}^{t}g^2ds+\int_{0}^{t}gdW
+\]
+con lo cual se tiene que
+\[
+dY=-\frac{1}{2}g^2dt+gdW
+\]
+Ahora usando el lema de Itô \ref{teo:Itô} con la función $u(x)=e^x$ y con $F\equiv\frac{1}{2}g^2$ y $G\equiv g$  tenemos que:
+\begin{align*}
+dX=&\left(\frac{\partial u}{\partial t} +\frac{\partial u}{\partial x}F+\frac{1}{2}\frac{\partial^2 u}{\partial x^2}G^2\right)dt+\frac{\partial u}{\partial x}GdW\\
+&=\left(0-e^{Y}\frac{1}{2}g^2+e^Y \frac{1}{2}g^2\right)dt+ e^YgdW\\
+&=gXdW
+\end{align*}
+
+
+
+## 1.5 Option Pricing
+
+En primer lugar, veamos una introducción absolutamente necesaria ya que si bien los conceptos matemáticos que se van a utilizar ya son conocidos es fácil perderse entre la literatura económica y dificultar así su entendimiento.
+
+Comencemos viendo lo que es un \textit{Derivado financiero}. Un derivado financiero es un contrato que se firma sobre el valor de un activo (un activo podría ser unas acciones o un bono). Es decir, en base a un activo, como puede ser el precio de un material (petróleo, oro, etc...) surgen contratos (cuánto va a valer en el futuro, precio de compra en un tiempo fijado,..) asociados a dicho producto. A partir de ahora, nos centraremos en  cómo fijar el precio de uno de esos derivados financieros llamado \textit{European call option} y que presentaremos a continuación. Pongamos un ejemplo de un derivado para comprenderlo mejor:
+
+
+Un productor de trigo y una fábrica de cereales ambos dependen del precio del trigo que sabemos que fluctúa en cada momento. Si el precio del trigo se reduce mucho el productor pierde dinero, pues casi no podrá rentabilizar los costes de producción con la venta del material,  y el empresario aumenta su beneficio ya que reduce el coste de la materia prima. Si tenemos la situación a la inversa, el precio del trigo sube mucho, el productor ganaría con esta situación mientras que 
+el empresario disminuiría sus beneficios. En este punto es donde surgen los derivados financieros ya que productor y empresario se pueden poner de acuerdo en el precio futuro del trigo para así minimizar los riesgos. Ambos podrían tratar de establecer el precio del trigo, a por ejemplo un año vista, de forma que pueden estimar los beneficios o perdidas cuando termine el año. Trascurrido ese año el precio fijado puede diferir del precio real pero aun así ambos han salido beneficiados ya que les ha permitido prever cuales serán sus beneficios o sus pérdidas.
+
+
+Por lo tanto, y a modo de resumen, una de las funciones de los derivados financieros es limitar el riesgo. 
+
+
+Una vez comprendido este concepto nos adentramos en uno de los tipos de derivados financieros que son las \textit{call options} y en concreto la \textit{European call option}. Una \textit{European call option} es el derecho pero no la obligación de comprar un cierto activo a un precio k en cuando se llegue al tiempo de vencimiento T. Es importante entender que las \textit{European call options} solo se pueden ejecutar en su fecha de vencimiento T, es decir, que hasta que no llegue dicho momento no se puede comprar el activo financiero. Situándonos en el ejemplo anterior, el empresario podría haber comprado una \textit{European call option} referida al precio del trigo y en caso de que en el momento T el precio del trigo fuese superior al precio fijado k podría ejecutar dicha acción y comprar el producto por un valor inferior al valor real y así aumentar su beneficio. \bigskip
+
+
+De aquí en adelante vamos a tratar principalmente con dos activos financieros que serán las acciones o stock ($S_t$) y los bonos ($B_t$) siendo el primero un activo con riesgo mientras que el segundo una forma en la que el inversor presta dinero a una entidad bajo la condición de que se lo devuelva con un cierto interés establecido.
+
+
+Pasamos ya al tema central de este proyecto que es precisamente encontrar el precio de algunos derivados financieros usando la simulación de Montecarlo. De aquí en adelante, los conceptos matemáticos iran siendo presentados sin hacer demasiado hincapié en algunos de ellos para evitar así que se vuelva excesivamente técnico. Si bien no es el objeto del proyecto, motivo al lector a que se adentre en el apasionante mundo de las matemáticas financieras.El modelo que vamos a presentar a continuación fue desarrollado por  Fischer Black, Robert Merton, y Myron Scholes en 1973 y sigue utilizando en su actualidad para fijar el precio de algunos derivados financieros.
+Modelo de Black-Scholes \label{def:MBS}
+Supongamos la existencia de unos valores r, $\sigma$ y $\mu$ tales que el precio del bono $B_t$ y el precio del stock $S_t$ viene dado por
+\begin{align*}
+&B_t=\exp(rt)\\
+&S_t=S_0 \exp(\sigma W +\mu t)
+\end{align*}
+donde r es la tasa de intéreses sin riesgo, $\sigma$ es la volatilidad y $\mu$ es le drift del stock. 
+
+Podemos empezar ya a vislumbrar un poco el porqué de la insistencia en presentar con anterioridad el movimiento browniano y las ecuaciones diferenciales estocásticas. Usando la formulación de Black-Scholes, hemos encontrado una forma de poder describir el precio de un activo financiero $S(t)$ mediante la siguiente ecuación diferencial estocástica $$dS_t=\sigma S_t dW_t + (\mu + \frac{1}{2} \sigma ^2) S_t dt$$. Por lo tanto, de cara a poder establecer un precio de nuestro activo podremos utilizar el mismo approach que realizamos con el movimiento browniano, es decir, realizar n-realizaciones de mi experimento. 
+
+Pasamos ahora a presentar el instrumento financiero en cuestión, que serán las European Call Options. En concreto, para este tipo de derivados financieros si que existen una solución concreta por medio de las ecuaciones en derivadas parciales de BlackScholes pero optamos por usar el método de montecarlo a fin de ilustrar como podríamos implementarlo y de compararlo con su ejercicio real.
+
+
+```{r}
+library(NMOF)
+
+npaths <- 5000   ## increase number to get more precise results
+timesteps <- 1
+S0   <- 100
+ST   <- 100
+tau  <- 1
+r <- 0.01
+v   <- 0.25^2
+
+## ... create paths
+paths <- gbm(npaths, timesteps, r, v, tau, S0 = S0)
+
+## ... a helper function
+mc <- function(paths, payoff, ...)
+  payoff(paths, ...)
+
+## ... a payoff function (European call)
+payoff <- function(paths, X, r, tau)
+  exp(-r * tau) * mean(pmax(paths[NROW(paths), ] - X, 0))
+
+## ... compute and check
+mc(paths, payoff, X = 100, r = r, tau = tau)
+vanillaOptionEuropean(S0, X = 100, tau = tau, r = r, v = v)$value
+
+
+## compute delta via forward difference
+## (see Gilli/Maringer/Schumann, ch. 9) 
+h <- 1e-6                 ## a small number
+rnorm(1)                  ## make sure RNG is initialised
+rnd.seed <- .Random.seed  ## store current seed
+paths1 <- gbm(npaths, timesteps, r, v, tau, S0 = S0)
+.Random.seed <- rnd.seed
+paths2 <- gbm(npaths, timesteps, r, v, tau, S0 = S0 + h)
+
+delta.mc <- (mc(paths2, payoff, X = 100, r = r, tau = tau)- 
+               mc(paths1, payoff, X = 100, r = r, tau = tau))/h
+delta <- vanillaOptionEuropean(S0, X = 100, tau = tau,
+                               r = r, v = v)$delta
+delta.mc - delta 
+
+
+
+
+## a fanplot
+steps <- 100
+paths <- results <- gbm(1000, steps, r = 0, v = 0.2^2,
+                        tau = 1, S0 = 100)
+
+levels <- seq(0.01, 0.49, length.out = 20)
+greys  <- seq(0.9,  0.50, length.out = length(levels))
+
+## start with an empty plot ...
+plot(0:steps, rep(100, steps+1), ylim = range(paths),
+     xlab = "", ylab = "", lty = 0, type = "l")
+
+## ... and add polygons
+for (level in levels) {
+  
+  l <- apply(paths, 1, quantile, level)
+  u <- apply(paths, 1, quantile, 1 - level)
+  col <- grey(greys[level == levels])
+  polygon(c(0:steps, steps:0), c(l, rev(u)),
+          col = col, border = NA)
+  
+  ## add border lines
+  ## lines(0:steps, l, col = grey(0.4))
+  ## lines(0:steps, u, col = grey(0.4))
+}
+
+```
+
+
+### Utilizacion de Jdmbs
+
+```{r}
+valor=jdm_bs(day=100,monte_carlo=10,start_price=c(5500,6500,80000),mu=c(0.1,0.2,0.05),sigma=c(0.11,0.115,0.1),lambda=2,K=c(6000,7000,12000),plot=TRUE)
+
+jdm_bs(day=100,monte_carlo=2,start_price=c(5500),mu=c(0.1),sigma=c(0.11),lambda=2,K=c(6000),plot=TRUE)
+valor
+```
+
+
+```{r}
+ui<-fluidPage(
+  
+  titlePanel("Geometric Brownian Motion - Monte Carlo Simulation"),
+  
+  sidebarLayout(
+    sidebarPanel(
+       numericInput("duracion",
+                    "Duración de la simulación:",
+                    min = 1,
+                    max = 200,
+                    value = 10,
+                    step = 1),
+       numericInput("iter",
+                    "Iterations of MonteCarlo Method",
+                    min = 1,
+                    value = 30),
+       numericInput("initPrice",
+                    "Precio inicial del stock",
+                    min = 1,
+                    value = 100),
+       numericInput("mu",
+                    "mu: ",
+                    min = 1,
+                    value = 1),
+       numericInput("sigma",
+                    "sigma: ",
+                    min = 1,
+                    value = 1),
+       numericInput("lambda",
+                    "lambda: ",
+                    min = 1,
+                    value = 1),
+       numericInput("strikePrice",
+                    "Precio de ejecución (StrikePrice): ",
+                    min = 1,
+                    value = 1),
+       checkboxInput("seeds",
+                     "Set seed?"),
+       numericInput("setseed",
+                    "Select number of seed",
+                    min = 1,
+                    value = 1),
+       submitButton("Submit")
+    ),
+    
+    mainPanel(
+       plotOutput("distPlot"),
+       headerPanel(withMathJax("$$\\text{GBM Model: } S_0 \\exp\\left(\\left(\\mu - \\frac{\\sigma^2}{2}\\right)t + \\sigma W_t\\right) $$")),
+       h4("To run the simulation you have to enter the following inputs on the side bar:"),
+       h4("Initial Stock Price is the current price of the stock;"),
+       h4("Drift rate is the expected rate of return;"),
+       h4("Yearly Standard Deviation is the volatility of the stock price;"),
+       h4("Number of Simulation represents how many simulation of stock price you want to display;"),
+       h4("In the side bar is also possible, through a check box, to set the seed to a fix value. Please mark the check box and select the value from the numeric box. If it is unmarked the seed will be assigned randomly.
+            As the calculation time increases with the number of simulation, there is a 'Submit' button to click as soon as the parameters are decided.")
+    )
+  )
+)
+
+server<-shinyServer(function(input, output) {
+   
+  output$distPlot <- renderPlot({
+          if (input$seeds == TRUE) {
+                  set.seed(input$setseed)
+          }
+          jdm_bs(day=input$duracion,monte_carlo=input$iter,start_price=input$initPrice,mu=input$mu,sigma=input$sigma,lambda=input$lambda,K=input$strikePrice,plot=TRUE)
+  })
+})
+shinyApp(ui = ui, server = server)
+```
+
+```{r}
+library(Sim.DiffProc)
+library(dplyr)
+a=GBM(N=1000,T=1,t0=0,x0=1,theta=4,sigma=2)
+b=GBM(N=1000,T=1,t0=0,x0=1,theta=4,sigma=2)
+c=GBM(N=1000,T=1,t0=0,x0=1,theta=4,sigma=2)
+plot(a)
+par(new=TRUE)
+plot(b)
+plot(c)
+datos=c(a,b,c)
+require(graphics)
+ts.plot(datos)
+```
+
+```{r}
+ui<-fluidPage(
+  
+  titlePanel("Geometric Brownian Motion - Monte Carlo Simulation"),
+  
+  sidebarLayout(
+    sidebarPanel(
+        selectizeInput(
+        "vec1"
+        , "Enter a vector"
+        , choices = NULL
+        , multiple = TRUE
+        , options = list(create = TRUE)
+      ),
+       numericInput("iter",
+                    "Iterations of MonteCarlo Method",
+                    min = 1,
+                    value = 30),
+       numericInput("initPrice",
+                    "Precio inicial del stock",
+                    min = 1,
+                    value = 100),
+       numericInput("mu",
+                    "mu: ",
+                    min = 1,
+                    value = 1),
+       numericInput("sigma",
+                    "sigma: ",
+                    min = 1,
+                    value = 1),
+       numericInput("lambda",
+                    "lambda: ",
+                    min = 1,
+                    value = 1),
+       numericInput("strikePrice",
+                    "Precio de ejecución (StrikePrice): ",
+                    min = 1,
+                    value = 1),
+       checkboxInput("seeds",
+                     "Set seed?"),
+       numericInput("setseed",
+                    "Select number of seed",
+                    min = 1,
+                    value = 1),
+       submitButton("Submit")
+    ),
+    
+    mainPanel(
+       plotOutput("distPlot"),
+       headerPanel(withMathJax("$$\\text{GBM Model: } S_0 \\exp\\left(\\left(\\mu - \\frac{\\sigma^2}{2}\\right)t + \\sigma W_t\\right) $$")),
+       h4("To run the simulation you have to enter the following inputs on the side bar:"),
+       h4("Initial Stock Price is the current price of the stock;"),
+       h4("Drift rate is the expected rate of return;"),
+       h4("Yearly Standard Deviation is the volatility of the stock price;"),
+       h4("Number of Simulation represents how many simulation of stock price you want to display;"),
+       h4("In the side bar is also possible, through a check box, to set the seed to a fix value. Please mark the check box and select the value from the numeric box. If it is unmarked the seed will be assigned randomly.
+            As the calculation time increases with the number of simulation, there is a 'Submit' button to click as soon as the parameters are decided.")
+    )
+  )
+)
+
+server<-shinyServer(function(input, output) {
+   
+  output$distPlot <- renderPlot({
+          if (input$seeds == TRUE) {
+                  set.seed(input$setseed)
+          }
+          jdm_bs(day=input$duracion,monte_carlo=input$iter,start_price=input$initPrice,mu=input$mu,sigma=input$sigma,lambda=input$lambda,K=input$strikePrice,plot=TRUE)
+  })
+})
+shinyApp(ui = ui, server = server)
+```
+
+
+
+
+```{r}
+library(shiny)
+
+ui <- shinyUI(
+
+  pageWithSidebar(
+
+    headerPanel("Entering Vectors in Shiny")
+
+    , sidebarPanel(
+
+      selectizeInput(
+        "vec1"
+        , "Enter a vector"
+        , choices = NULL
+        , multiple = TRUE
+        , options = list(create = TRUE)
+      )
+
+    ),
+
+    mainPanel(
+
+      h4("You entered")
+
+      , verbatimTextOutput("oid1")
+
+      , verbatimTextOutput("oid2")
+
+    )
+
+  )
+)
+
+server <- shinyServer(function(input, output) {
+
+  output$oid1 <- renderPrint({
+
+    req(input$vec1)
+
+    cat("As string:\n")
+    cat(input$vec1)
+
+  })
+
+  output$oid2 <- renderPrint({
+
+    req(input$vec1)
+
+    cat("As atomic vector:\n")
+    print(as.numeric(input$vec1))
+    print(as.numeric(input$vec1))
+    a=as.array(as.numeric(input$vec1))
+    print(a)
+    print(a[1])
+  })
+
+})
+
+shinyApp(ui = ui, server = server)
+```
+
+
+
+
+## BIBILIOGRAFÍA
+
+1) https://brilliant.org/wiki/monte-carlo/
+2) https://towardsdatascience.com/monte-carlo-simulation-in-r-with-focus-on-financial-data-ad43e2a4aedf
+3) https://en.wikipedia.org/wiki/Monte_Carlo_method
+4) https://www.diva-portal.org/smash/get/diva2:301061/FULLTEXT01.pdf
+5) https://cran.r-project.org/web/packages/Jdmbs/vignettes/Jdmbs-vignette.pdf
+6) http://personal.psu.edu/alm24/students/bingqianMonteCarlo.pdf
+
